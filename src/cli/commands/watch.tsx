@@ -23,7 +23,8 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
       name: config.name,
       status: "pending",
       toolCalls: 0,
-      tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       mentalModels: config.models,
       completedModels: 0,
     }))
@@ -92,7 +93,8 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
                   status,
                   currentTool: agentProgress.lastAction,
                   toolCalls: agentProgress.turn,
-                  tokensUsed: agentProgress.inputTokens + agentProgress.outputTokens,
+                  inputTokens: agentProgress.inputTokens,
+                  outputTokens: agentProgress.outputTokens,
                   completedModels: status === "done" ? agent.mentalModels.length : Math.floor(agentProgress.turn / 2),
                 };
               })

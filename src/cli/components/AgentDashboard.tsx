@@ -10,10 +10,31 @@ export interface AgentState {
   status: AgentStatus;
   currentTool?: string;
   toolCalls: number;
-  tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   mentalModels: string[];
   completedModels: number;
   error?: string;
+}
+
+// Claude Sonnet 4.5 pricing
+const INPUT_COST_PER_MTOK = 1.50;
+const OUTPUT_COST_PER_MTOK = 7.50;
+
+function calculateCost(inputTokens: number, outputTokens: number): number {
+  return (inputTokens / 1_000_000) * INPUT_COST_PER_MTOK +
+         (outputTokens / 1_000_000) * OUTPUT_COST_PER_MTOK;
+}
+
+function formatCost(cost: number): string {
+  if (cost < 0.01) return `$${(cost * 100).toFixed(2)}¢`;
+  return `$${cost.toFixed(2)}`;
+}
+
+function formatTokens(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}m`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
+  return `${count}`;
 }
 
 interface AgentCardProps {
@@ -147,7 +168,11 @@ function AgentCard({ agent, width, compact = false, selected = false }: AgentCar
 
       {/* Stats + Progress */}
       <Box justifyContent="space-between">
-        <Text dimColor>{agent.toolCalls} calls · {agent.tokensUsed > 0 ? `${(agent.tokensUsed / 1000).toFixed(0)}k tok` : "-"}</Text>
+        <Text dimColor>
+          {agent.toolCalls} calls · {agent.inputTokens + agent.outputTokens > 0
+            ? `${formatTokens(agent.inputTokens + agent.outputTokens)} · ${formatCost(calculateCost(agent.inputTokens, agent.outputTokens))}`
+            : "-"}
+        </Text>
         <Box>
           {agent.mentalModels.map((_, i) => (
             <Text key={i} color={i < agent.completedModels ? "green" : "gray"}>
@@ -200,7 +225,12 @@ function AgentDetailPanel({ agent, onClose }: AgentDetailPanelProps) {
 
         <Box flexDirection="column">
           <Text dimColor>Tokens</Text>
-          <Text bold>{agent.tokensUsed > 0 ? `${(agent.tokensUsed / 1000).toFixed(1)}k` : "-"}</Text>
+          <Text bold>{agent.inputTokens + agent.outputTokens > 0 ? formatTokens(agent.inputTokens + agent.outputTokens) : "-"}</Text>
+        </Box>
+
+        <Box flexDirection="column">
+          <Text dimColor>Cost</Text>
+          <Text bold color="yellow">{agent.inputTokens + agent.outputTokens > 0 ? formatCost(calculateCost(agent.inputTokens, agent.outputTokens)) : "-"}</Text>
         </Box>
 
         <Box flexDirection="column">
@@ -274,7 +304,10 @@ export function AgentDashboard({ agents, ticker, elapsedTime, phase }: AgentDash
 
   const completedCount = agents.filter(a => a.status === "done").length;
   const totalToolCalls = agents.reduce((sum, a) => sum + a.toolCalls, 0);
-  const totalTokens = agents.reduce((sum, a) => sum + a.tokensUsed, 0);
+  const totalInputTokens = agents.reduce((sum, a) => sum + a.inputTokens, 0);
+  const totalOutputTokens = agents.reduce((sum, a) => sum + a.outputTokens, 0);
+  const totalTokens = totalInputTokens + totalOutputTokens;
+  const totalCost = calculateCost(totalInputTokens, totalOutputTokens);
 
   // Calculate card width based on terminal width (5 columns with gaps)
   const gap = 1;
@@ -316,8 +349,8 @@ export function AgentDashboard({ agents, ticker, elapsedTime, phase }: AgentDash
         <Box gap={3}>
           {!compact && (
             <>
-              <Text dimColor>Tools: <Text color="white">{totalToolCalls}</Text></Text>
-              <Text dimColor>Tokens: <Text color="white">{totalTokens > 0 ? `${(totalTokens / 1000).toFixed(1)}k` : "-"}</Text></Text>
+              <Text dimColor>Tokens: <Text color="white">{totalTokens > 0 ? formatTokens(totalTokens) : "-"}</Text></Text>
+              <Text dimColor>Cost: <Text color="yellow">{totalTokens > 0 ? formatCost(totalCost) : "-"}</Text></Text>
             </>
           )}
           <Text color="gray">{Math.floor(elapsedTime / 1000)}s</Text>

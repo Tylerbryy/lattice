@@ -24,7 +24,8 @@ function MockWatchApp() {
       name: config.name,
       status: "pending",
       toolCalls: 0,
-      tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       mentalModels: config.models,
       completedModels: 0,
     }))
@@ -82,12 +83,15 @@ function MockWatchApp() {
             setAgents((prev) =>
               prev.map((a) => {
                 if (a.id !== agent.id) return a;
+                const newInputTokens = Math.floor(Math.random() * 1500) + 400;
+                const newOutputTokens = Math.floor(Math.random() * 500) + 100;
                 return {
                   ...a,
                   status: isToolCall ? "tool_call" : "thinking",
                   currentTool: tool,
                   toolCalls: a.toolCalls + 1,
-                  tokensUsed: a.tokensUsed + Math.floor(Math.random() * 2000) + 500,
+                  inputTokens: a.inputTokens + newInputTokens,
+                  outputTokens: a.outputTokens + newOutputTokens,
                   completedModels: Math.min(
                     a.completedModels + 1,
                     a.mentalModels.length - 1
@@ -111,7 +115,8 @@ function MockWatchApp() {
                     status: "done",
                     currentTool: undefined,
                     completedModels: a.mentalModels.length,
-                    tokensUsed: a.tokensUsed + Math.floor(Math.random() * 1000),
+                    inputTokens: a.inputTokens + Math.floor(Math.random() * 800),
+                    outputTokens: a.outputTokens + Math.floor(Math.random() * 200),
                   }
                 : a
             )
