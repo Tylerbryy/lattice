@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Config with secrets
+.lattice/
+
+# Logs
+*.log
+/tmp/lattice-debug.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Bun
+bun.lockb
+
+# TypeScript
+*.tsbuildinfo

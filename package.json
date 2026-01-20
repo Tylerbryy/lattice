@@ -1,0 +1,50 @@
+{
+  "name": "lattice",
+  "version": "1.0.0",
+  "description": "CLI tool that analyzes stocks through Charlie Munger's latticework of mental models using parallel AI agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "lattice": "./bin/lattice.js"
+  },
+  "scripts": {
+    "build": "bun run tsc",
+    "dev": "bun run src/index.ts",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "analyze": "bun run src/index.ts analyze",
+    "mock": "bun run dist/index.js mock",
+    "mock-watch": "bun run dist/index.js mock-watch",
+    "watch": "bun run dist/index.js watch"
+  },
+  "keywords": [
+    "stock-analysis",
+    "charlie-munger",
+    "mental-models",
+    "ai",
+    "cli"
+  ],
+  "author": "Tyler Gibbs",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "chalk": "^5.3.0",
+    "cheerio": "^1.0.0",
+    "commander": "^12.0.0",
+    "exa-js": "^1.0.0",
+    "ink": "^4.4.1",
+    "ink-spinner": "^5.0.0",
+    "marked": "15",
+    "marked-terminal": "^7.3.0",
+    "react": "^18.2.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
