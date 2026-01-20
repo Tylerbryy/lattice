@@ -84,7 +84,27 @@ export interface NewsItem {
   date: string;
 }
 
-export type Signal = "bullish" | "bearish" | "neutral" | "insufficient_data";
+// Re-export persona types for convenience
+export type {
+  PersonaId,
+  MungerSignal,
+  MungerVerdict,
+  CathieSignal,
+  CathieVerdict,
+  MungerCategoryInsights,
+  CathieCategoryInsights,
+} from "../personas/types.js";
+
+// Import for local use
+import type {
+  PersonaId,
+  Signal as PersonaSignal,
+  Verdict as PersonaVerdict,
+  CategoryInsights as PersonaCategoryInsights,
+} from "../personas/types.js";
+
+// Use persona union types
+export type Signal = PersonaSignal;
 
 export interface QuantitativeFinding {
   metric: string;
@@ -113,13 +133,7 @@ export interface AgentOutput {
   dataGaps: string[];
 }
 
-export type Verdict =
-  | "STRONG BUY"
-  | "BUY"
-  | "HOLD"
-  | "SELL"
-  | "STRONG SELL"
-  | "TOO HARD";
+export type Verdict = PersonaVerdict;
 
 export interface KeyNumbers {
   intrinsicValueEstimate?: {
@@ -130,17 +144,13 @@ export interface KeyNumbers {
   fiveYearCAGRProjection?: number;
 }
 
-export interface CategoryInsights {
-  coreInvestment: string;
-  psychologyBehavioral: string;
-  mathProbability: string;
-  economicsBusiness: string;
-  systemsThinking: string;
-  decisionFilters: string;
-}
+export type CategoryInsights = PersonaCategoryInsights;
 
 export interface FinalAnalysis {
-  whatCharlieWouldSay: string;
+  /** The persona's analysis in their voice */
+  personaAnalysis: string;
+  /** @deprecated Use personaAnalysis - kept for backward compatibility with Munger analyses */
+  whatCharlieWouldSay?: string;
   verdict: Verdict;
   keyNumbers?: KeyNumbers;
   categoryInsights: CategoryInsights;
@@ -150,6 +160,7 @@ export interface FinalAnalysis {
 
 export interface AnalysisResult {
   ticker: string;
+  personaId: PersonaId;
   financialData: FinvizData;
   agentOutputs: AgentOutput[];
   finalAnalysis: FinalAnalysis;

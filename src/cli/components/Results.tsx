@@ -6,61 +6,25 @@ import { VerdictBox } from "./VerdictBox.js";
 import { QuantHighlights } from "./QuantHighlights.js";
 import { Scorecard } from "./Scorecard.js";
 import { aggregateSignals, getAverageConfidence } from "../../agents/orchestrator.js";
+import type { PersonaConfig } from "../../personas/types.js";
+import { getPersonaSafe } from "../../personas/index.js";
 
 interface ResultsProps {
   result: AnalysisResult;
   verbose?: boolean;
   elapsedTime?: number;
-}
-
-// Category configuration for DRY iteration
-const CATEGORIES = [
-  { key: "coreInvestment", label: "Core Investment", color: "cyan" },
-  { key: "psychologyBehavioral", label: "Psychology", color: "magenta" },
-  { key: "mathProbability", label: "Math & Probability", color: "blue" },
-  { key: "economicsBusiness", label: "Economics", color: "yellow" },
-  { key: "systemsThinking", label: "Systems", color: "green" },
-  { key: "decisionFilters", label: "Decision Filters", color: "white" },
-] as const;
-
-// Agent groupings for model analysis sections
-const AGENT_GROUPS = [
-  { title: "Core Investment Principles", agentIds: [1], color: "cyan" },
-  { title: "Moats & Ownership Quality", agentIds: [2], color: "cyan" },
-  { title: "Psychology & Behavioral", agentIds: [3, 4], color: "magenta" },
-  { title: "Lollapalooza Effects", agentIds: [5], color: "magenta" },
-  { title: "Math & Probability", agentIds: [6, 7], color: "blue" },
-  { title: "Economics & Business", agentIds: [8], color: "yellow" },
-  { title: "Systems Thinking", agentIds: [9], color: "green" },
-  { title: "Decision Filters", agentIds: [10], color: "white" },
-] as const;
-
-function getSignalColor(signal: Signal): string {
-  switch (signal) {
-    case "bullish": return "green";
-    case "bearish": return "red";
-    case "neutral": return "yellow";
-    case "insufficient_data": return "gray";
-    default: return "white";
-  }
-}
-
-function getSignalSymbol(signal: Signal): string {
-  switch (signal) {
-    case "bullish": return "+";
-    case "bearish": return "-";
-    case "neutral": return "~";
-    case "insufficient_data": return "?";
-    default: return " ";
-  }
+  persona?: PersonaConfig;
 }
 
 function countSignals(analyses: ModelAnalysis[]) {
   return analyses.reduce(
     (acc, a) => {
-      if (a.signal === "bullish") acc.bullish++;
-      else if (a.signal === "bearish") acc.bearish++;
-      else if (a.signal === "neutral") acc.neutral++;
+      // Count positive signals (bullish for Munger, disruptive for Cathie)
+      if (a.signal === "bullish" || a.signal === "disruptive") acc.bullish++;
+      // Count negative signals (bearish for Munger, legacy for Cathie)
+      else if (a.signal === "bearish" || a.signal === "legacy") acc.bearish++;
+      // Count neutral/stagnant signals
+      else if (a.signal === "neutral" || a.signal === "stagnant") acc.neutral++;
       else acc.insufficient++;
       return acc;
     },
@@ -69,11 +33,12 @@ function countSignals(analyses: ModelAnalysis[]) {
 }
 
 // Improved Signal Bar with inline counts
-function SignalBar({ bullish, bearish, neutral, insufficient }: {
+function SignalBar({ bullish, bearish, neutral, insufficient, persona }: {
   bullish: number;
   bearish: number;
   neutral: number;
   insufficient: number;
+  persona: PersonaConfig;
 }) {
   const total = bullish + bearish + neutral + insufficient;
   const width = 40;
@@ -82,6 +47,11 @@ function SignalBar({ bullish, bearish, neutral, insufficient }: {
   const bearishWidth = Math.round((bearish / total) * width);
   const neutralWidth = Math.round((neutral / total) * width);
   const insufficientWidth = Math.max(0, width - bullishWidth - bearishWidth - neutralWidth);
+
+  // Persona-specific labels
+  const labels = persona.id === "cathie"
+    ? { positive: "disruptive", negative: "legacy", neutral: "stagnant" }
+    : { positive: "bullish", negative: "bearish", neutral: "neutral" };
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -115,7 +85,7 @@ function SignalBar({ bullish, bearish, neutral, insufficient }: {
 
       {/* Legend on one line */}
       <Text dimColor>
-        {bullish} bullish · {bearish} bearish · {neutral} neutral · {insufficient} n/a
+        {bullish} {labels.positive} · {bearish} {labels.negative} · {neutral} {labels.neutral} · {insufficient} n/a
       </Text>
     </Box>
   );
@@ -146,17 +116,16 @@ function TLDRBox({
   conviction,
   marginOfSafety,
   oneLiner,
+  persona,
 }: {
   verdict: string;
   signals: { bullish: number; bearish: number; neutral: number; insufficientData: number };
   conviction: number;
   marginOfSafety?: number;
   oneLiner: string;
+  persona: PersonaConfig;
 }) {
-  const verdictColor = verdict.includes("BUY") ? "green"
-    : verdict.includes("SELL") ? "red"
-    : verdict === "TOO HARD" ? "gray"
-    : "yellow";
+  const verdictColor = persona.getVerdictColor(verdict);
 
   return (
     <Box
@@ -201,18 +170,9 @@ function TLDRBox({
 }
 
 // Improved ModelCard with signal leading
-function ModelCard({ analysis, compact = false }: { analysis: ModelAnalysis; compact?: boolean }) {
-  const color = getSignalColor(analysis.signal);
-  const symbol = getSignalSymbol(analysis.signal);
-
-  if (compact) {
-    return (
-      <Box gap={1}>
-        <Text color={color}>{symbol}</Text>
-        <Text>{analysis.modelName}</Text>
-      </Box>
-    );
-  }
+function ModelCard({ analysis, persona }: { analysis: ModelAnalysis; persona: PersonaConfig }) {
+  const color = persona.getSignalColor(analysis.signal);
+  const symbol = persona.getSignalSymbol(analysis.signal);
 
   return (
     <Box
@@ -247,19 +207,18 @@ function ModelCard({ analysis, compact = false }: { analysis: ModelAnalysis; com
 function CollapsibleModelGroup({
   title,
   analyses,
-  defaultExpanded = false,
   color = "white",
   index,
   selectedIndex,
-  onToggle,
+  persona,
 }: {
   title: string;
   analyses: ModelAnalysis[];
-  defaultExpanded?: boolean;
   color?: string;
   index: number;
   selectedIndex: number | null;
   onToggle: (index: number) => void;
+  persona: PersonaConfig;
 }) {
   const isExpanded = selectedIndex === index;
   const signals = countSignals(analyses);
@@ -285,7 +244,7 @@ function CollapsibleModelGroup({
       {isExpanded && (
         <Box flexDirection="column" paddingLeft={2}>
           {analyses.map((a, i) => (
-            <ModelCard key={i} analysis={a} />
+            <ModelCard key={i} analysis={a} persona={persona} />
           ))}
         </Box>
       )}
@@ -309,10 +268,13 @@ function Section({ title, children, color = "white" }: {
   );
 }
 
-export function Results({ result, verbose = false, elapsedTime }: ResultsProps) {
+export function Results({ result, verbose = false, elapsedTime, persona }: ResultsProps) {
   const { ticker, financialData, agentOutputs, finalAnalysis } = result;
   const signals = aggregateSignals(agentOutputs);
   const avgConfidence = getAverageConfidence(agentOutputs);
+
+  // Get persona from result or prop or default
+  const resolvedPersona = persona || getPersonaSafe(result.personaId);
 
   // State for collapsible sections in verbose mode
   const [expandedGroup, setExpandedGroup] = useState<number | null>(null);
@@ -320,8 +282,8 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
   // Keyboard navigation for verbose mode - only active when verbose is true
   useInput(
     (input, key) => {
-      const numGroups = AGENT_GROUPS.length;
-      if (input >= "1" && input <= "8") {
+      const numGroups = resolvedPersona.agentGroups.length;
+      if (input >= "1" && input <= String(numGroups)) {
         const idx = parseInt(input) - 1;
         setExpandedGroup(expandedGroup === idx ? null : idx);
       }
@@ -338,8 +300,9 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
     { isActive: verbose }
   );
 
-  // Get first sentence of whatCharlieWouldSay for TL;DR
-  const oneLiner = finalAnalysis.whatCharlieWouldSay.split(/[.!?]/)[0] + ".";
+  // Get first sentence of personaAnalysis for TL;DR
+  const analysisText = finalAnalysis.personaAnalysis || finalAnalysis.whatCharlieWouldSay || "";
+  const oneLiner = analysisText.split(/[.!?]/)[0] + ".";
 
   // Group analyses by agent
   const getAnalysesForGroup = (agentIds: readonly number[]) =>
@@ -367,6 +330,7 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
         conviction={avgConfidence}
         marginOfSafety={finalAnalysis.keyNumbers?.marginOfSafety}
         oneLiner={oneLiner}
+        persona={resolvedPersona}
       />
 
       <Divider label="Analysis" />
@@ -378,14 +342,16 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
           bearish={signals.bearish}
           neutral={signals.neutral}
           insufficient={signals.insufficientData}
+          persona={resolvedPersona}
         />
       </Section>
 
-      {/* Charlie's Verdict - full version */}
+      {/* Persona's Verdict - full version */}
       <VerdictBox
         verdict={finalAnalysis.verdict}
-        whatCharlieWouldSay={finalAnalysis.whatCharlieWouldSay}
+        personaAnalysis={finalAnalysis.personaAnalysis || finalAnalysis.whatCharlieWouldSay || ""}
         conviction={avgConfidence}
+        persona={resolvedPersona}
       />
 
       {/* Key Numbers */}
@@ -396,18 +362,21 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
 
       <Divider label="Category Insights" />
 
-      {/* Category Insights - DRY loop */}
+      {/* Category Insights - dynamically from persona */}
       <Box flexDirection="column" gap={1}>
-        {CATEGORIES.map(({ key, label, color }) => (
-          <Box key={key} flexDirection="column">
-            <Text color={color} bold>▸ {label}</Text>
-            <Box paddingLeft={2}>
-              <Text wrap="wrap" color="gray">
-                {finalAnalysis.categoryInsights[key as keyof typeof finalAnalysis.categoryInsights]}
-              </Text>
+        {resolvedPersona.categories.map(({ key, label, color }) => {
+          const insight = (finalAnalysis.categoryInsights as unknown as Record<string, string>)[key];
+          return (
+            <Box key={key} flexDirection="column">
+              <Text color={color} bold>▸ {label}</Text>
+              <Box paddingLeft={2}>
+                <Text wrap="wrap" color="gray">
+                  {insight || "No insight available"}
+                </Text>
+              </Box>
             </Box>
-          </Box>
-        ))}
+          );
+        })}
       </Box>
 
       {/* Summary Scorecard */}
@@ -449,10 +418,10 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
         <>
           <Divider label="Detailed Mental Model Analysis" />
           <Box marginBottom={1}>
-            <Text dimColor>Press 1-8 to expand/collapse groups, ↑↓ to navigate, ESC to close</Text>
+            <Text dimColor>Press 1-{resolvedPersona.agentGroups.length} to expand/collapse groups, ↑↓ to navigate, ESC to close</Text>
           </Box>
 
-          {AGENT_GROUPS.map((group, index) => (
+          {resolvedPersona.agentGroups.map((group, index) => (
             <CollapsibleModelGroup
               key={group.title}
               title={group.title}
@@ -461,6 +430,7 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
               index={index}
               selectedIndex={expandedGroup}
               onToggle={setExpandedGroup}
+              persona={resolvedPersona}
             />
           ))}
         </>
@@ -470,7 +440,7 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
       <Divider />
       <Box>
         <Text dimColor>
-          {agentOutputs.length} agents · 28 mental models · {Math.round(avgConfidence * 100)}% avg confidence
+          {agentOutputs.length} agents · {resolvedPersona.displayName} · {Math.round(avgConfidence * 100)}% avg confidence
           {elapsedTime && ` · ${Math.round(elapsedTime / 1000)}s`}
         </Text>
       </Box>

@@ -11,6 +11,8 @@ import {
 import { synthesizeAnalysis } from "../../synthesis/finalAnalysis.js";
 import { loadConfig } from "../../utils/config.js";
 import { saveAnalysis } from "../../utils/history.js";
+import { getPersona } from "../../personas/index.js";
+import type { PersonaId, PersonaConfig } from "../../personas/types.js";
 import type { AnalysisResult, FinvizData, AgentOutput } from "../../data/types.js";
 
 type Phase = "init" | "fetching" | "analyzing" | "synthesizing" | "done" | "error";
@@ -18,9 +20,10 @@ type Phase = "init" | "fetching" | "analyzing" | "synthesizing" | "done" | "erro
 interface AnalyzeAppProps {
   ticker: string;
   verbose?: boolean;
+  persona: PersonaConfig;
 }
 
-function AnalyzeApp({ ticker, verbose }: AnalyzeAppProps) {
+function AnalyzeApp({ ticker, verbose, persona }: AnalyzeAppProps) {
   const [phase, setPhase] = useState<Phase>("init");
   const [progress, setProgress] = useState<AnalysisProgress>({
     completed: 0,
@@ -59,6 +62,7 @@ function AnalyzeApp({ ticker, verbose }: AnalyzeAppProps) {
             ticker,
             data,
             config,
+            persona,
             (prog) => setProgress(prog)
           );
         } catch (err) {
@@ -67,13 +71,14 @@ function AnalyzeApp({ ticker, verbose }: AnalyzeAppProps) {
           );
         }
 
-        // Phase 3: Synthesize with Charlie Munger voice
+        // Phase 3: Synthesize with persona voice
         setPhase("synthesizing");
         const finalAnalysis = await synthesizeAnalysis(
           ticker,
           data,
           agentOutputs,
-          config
+          config,
+          persona
         );
 
         // Done
@@ -81,6 +86,7 @@ function AnalyzeApp({ ticker, verbose }: AnalyzeAppProps) {
         setElapsedTime(elapsed);
         const analysisResult: AnalysisResult = {
           ticker,
+          personaId: persona.id,
           financialData: data,
           agentOutputs,
           finalAnalysis,
@@ -120,7 +126,7 @@ function AnalyzeApp({ ticker, verbose }: AnalyzeAppProps) {
   }
 
   if (phase === "done" && result) {
-    return <Results result={result} verbose={verbose} elapsedTime={elapsedTime} />;
+    return <Results result={result} verbose={verbose} elapsedTime={elapsedTime} persona={persona} />;
   }
 
   return (
@@ -157,11 +163,13 @@ function AnalyzeApp({ ticker, verbose }: AnalyzeAppProps) {
 
 export async function analyzeCommand(
   ticker: string,
-  options: { verbose?: boolean }
+  options: { verbose?: boolean; persona?: PersonaId }
 ): Promise<void> {
+  const persona = getPersona(options.persona || "munger");
+
   return new Promise((resolve) => {
     const { unmount, waitUntilExit } = render(
-      <AnalyzeApp ticker={ticker.toUpperCase()} verbose={options.verbose} />
+      <AnalyzeApp ticker={ticker.toUpperCase()} verbose={options.verbose} persona={persona} />
     );
 
     waitUntilExit().then(() => {

@@ -9,6 +9,8 @@ import {
 import { formatFinvizDataForPrompt } from "../data/finvizScraper.js";
 import type { FinvizData, AgentOutput, Signal, Grade, ModelAnalysis } from "../data/types.js";
 import type { LatticeConfig } from "../utils/config.js";
+import type { PersonaConfig } from "../personas/types.js";
+import { getPersonaSafe, DEFAULT_PERSONA_ID } from "../personas/index.js";
 
 import * as fs from "fs";
 
@@ -27,14 +29,37 @@ function debugLog(message: string) {
 function buildAgentPrompt(
   config: AgentConfig,
   ticker: string,
-  data: FinvizData
+  data: FinvizData,
+  persona: PersonaConfig
 ): string {
   const modelsArray = config.models.map(m => `"${m}"`).join(", ");
+
+  // Persona-specific context
+  const personaContext = persona.id === "cathie"
+    ? `You are one of 10 specialist analysts contributing to a comprehensive ARK-style disruptive innovation analysis. Your insights will be synthesized by a "Cathie Wood" persona who will deliver the final verdict. Write for an investor focused on long-term disruption and exponential growth.`
+    : `You are one of 10 specialist analysts contributing to a comprehensive Munger-style investment analysis. Your insights will be synthesized by a "Charlie Munger" persona who will deliver the final verdict. Write for a sophisticated investor who values specificity over generalities.`;
+
+  // Persona-specific signal explanation
+  const signalExplanation = persona.id === "cathie"
+    ? `3. **Assign signals based on clear criteria**:
+   - \`disruptive\`: Company is driving or benefiting from disruptive innovation
+   - \`stagnant\`: No clear disruption dynamic, incremental at best
+   - \`legacy\`: Company is being disrupted, potential value trap
+   - \`insufficient_data\`: Cannot form a view due to missing critical information`
+    : `3. **Assign signals based on clear criteria**:
+   - \`bullish\`: Evidence strongly favors investment (e.g., significant undervaluation, strong moat, favorable trends)
+   - \`bearish\`: Evidence argues against investment (e.g., overvaluation, deteriorating position, major risks)
+   - \`neutral\`: Mixed or balanced evidence, no clear directional lean
+   - \`insufficient_data\`: Cannot form a view due to missing critical information`;
+
+  const signalEnum = persona.id === "cathie"
+    ? '"signal": "disruptive|stagnant|legacy|insufficient_data"'
+    : '"signal": "bullish|bearish|neutral|insufficient_data"';
 
   return `# Stock Analysis: ${ticker} (${data.companyName})
 
 ## Context
-You are one of 10 specialist analysts contributing to a comprehensive Munger-style investment analysis. Your insights will be synthesized by a "Charlie Munger" persona who will deliver the final verdict. Write for a sophisticated investor who values specificity over generalities.
+${personaContext}
 
 ## Your Assigned Mental Models
 ${config.models.map((m, i) => `${i + 1}. ${m}`).join("\n")}
@@ -51,11 +76,7 @@ ${formatFinvizDataForPrompt(data)}
    - \`code_execution\`: Use for DCF calculations, sensitivity analysis, scenario modeling, or statistical analysis. The sandbox has Python with pandas, numpy, scipy.
    - \`exa_search\`: Use ONLY if you need information not in the financial data (recent news, competitive moves, regulatory changes). Most analyses won't need this.
 
-3. **Assign signals based on clear criteria**:
-   - \`bullish\`: Evidence strongly favors investment (e.g., significant undervaluation, strong moat, favorable trends)
-   - \`bearish\`: Evidence argues against investment (e.g., overvaluation, deteriorating position, major risks)
-   - \`neutral\`: Mixed or balanced evidence, no clear directional lean
-   - \`insufficient_data\`: Cannot form a view due to missing critical information
+${signalExplanation}
 
 4. **Assign letter grades (A+ to F)** for each mental model based on how the company scores:
    - A+/A/A-: Excellent (top decile for this factor)
@@ -103,7 +124,7 @@ Return a JSON object with EXACTLY this structure. The "analyses" array must cont
     {
       "modelName": "EXACT_MODEL_NAME",
       "assessment": "4-6 sentences with specific evidence from the data",
-      "signal": "bullish|bearish|neutral|insufficient_data",
+      ${signalEnum},
       "grade": "A+|A|A-|B+|B|B-|C+|C|C-|D+|D|D-|F",
       "gradeNote": "3-8 word explanation of grade",
       "keyFactors": ["specific factor 1", "specific factor 2", "specific factor 3"]
@@ -125,7 +146,8 @@ async function runSingleAgent(
   config: AgentConfig,
   ticker: string,
   data: FinvizData,
-  mungerConfig: LatticeConfig,
+  latticeConfig: LatticeConfig,
+  persona: PersonaConfig,
   onTurnProgress?: (turn: number, action: string, inputTokens?: number, outputTokens?: number) => void
 ): Promise<AgentRunResult> {
   const tools: Anthropic.Messages.Tool[] = [
@@ -134,8 +156,11 @@ async function runSingleAgent(
 
   // Use unknown[] to avoid type issues with beta API
   const messages: Array<{role: "user" | "assistant", content: unknown}> = [
-    { role: "user", content: buildAgentPrompt(config, ticker, data) },
+    { role: "user", content: buildAgentPrompt(config, ticker, data, persona) },
   ];
+
+  // Dynamic signal enum based on persona
+  const signalEnum = persona.validSignals as unknown as string[];
 
   let turns = 0;
   let totalInputTokens = 0;
@@ -168,7 +193,7 @@ async function runSingleAgent(
                 properties: {
                   modelName: { type: "string" },
                   assessment: { type: "string" },
-                  signal: { type: "string", enum: ["bullish", "bearish", "neutral", "insufficient_data"] },
+                  signal: { type: "string", enum: signalEnum },
                   grade: { type: "string", enum: ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F"] },
                   gradeNote: { type: "string" },
                   keyFactors: { type: "array", items: { type: "string" } },
@@ -208,7 +233,7 @@ async function runSingleAgent(
           onTurnProgress?.(turns, "Web search...", totalInputTokens, totalOutputTokens);
           const result = await handleExaSearch(
             toolUse.input as ExaSearchInput,
-            mungerConfig
+            latticeConfig
           );
           toolResults.push({
             type: "tool_result",
@@ -480,16 +505,21 @@ export interface AnalysisProgress {
 export async function runAllAgents(
   ticker: string,
   data: FinvizData,
-  mungerConfig: LatticeConfig,
+  latticeConfig: LatticeConfig,
+  persona?: PersonaConfig,
   onProgress?: (progress: AnalysisProgress) => void
 ): Promise<AgentOutput[]> {
-  const client = new Anthropic({ apiKey: mungerConfig.anthropicApiKey });
-  const total = allAgentConfigs.length;
+  // Use persona agents or fall back to default Munger agents
+  const resolvedPersona = persona || getPersonaSafe(DEFAULT_PERSONA_ID);
+  const agentConfigs = resolvedPersona.agents;
+
+  const client = new Anthropic({ apiKey: latticeConfig.anthropicApiKey });
+  const total = agentConfigs.length;
   let completed = 0;
 
   // Initialize agent progress tracking
   const agentProgressMap = new Map<number, AgentProgress>();
-  for (const config of allAgentConfigs) {
+  for (const config of agentConfigs) {
     agentProgressMap.set(config.id, {
       agentId: config.id,
       agentName: config.name,
@@ -514,7 +544,7 @@ export async function runAllAgents(
 
   // Run all agents in parallel
   const results = await Promise.all(
-    allAgentConfigs.map(async (config) => {
+    agentConfigs.map(async (config) => {
       // Mark as running
       agentProgressMap.set(config.id, {
         ...agentProgressMap.get(config.id)!,
@@ -530,7 +560,8 @@ export async function runAllAgents(
           config,
           ticker,
           data,
-          mungerConfig,
+          latticeConfig,
+          resolvedPersona,
           (turn, action, inputTokens, outputTokens) => {
             agentProgressMap.set(config.id, {
               ...agentProgressMap.get(config.id)!,

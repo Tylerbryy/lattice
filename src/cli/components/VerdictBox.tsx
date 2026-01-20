@@ -2,54 +2,33 @@ import React from "react";
 import { Box, Text, Spacer } from "ink";
 import { Markdown } from "./Markdown.js";
 import type { Verdict } from "../../data/types.js";
+import type { PersonaConfig } from "../../personas/types.js";
+import { getPersonaSafe } from "../../personas/index.js";
 
 interface VerdictBoxProps {
   verdict: Verdict;
-  whatCharlieWouldSay: string;
+  personaAnalysis: string;
+  /** @deprecated Use personaAnalysis instead */
+  whatCharlieWouldSay?: string;
   conviction?: number;
+  persona?: PersonaConfig;
 }
 
-function getVerdictColor(verdict: Verdict): string {
-  switch (verdict) {
-    case "STRONG BUY":
-      return "green";
-    case "BUY":
-      return "greenBright";
-    case "HOLD":
-      return "yellow";
-    case "SELL":
-      return "redBright";
-    case "STRONG SELL":
-      return "red";
-    case "TOO HARD":
-      return "gray";
-    default:
-      return "white";
-  }
-}
+export function VerdictBox({ verdict, personaAnalysis, whatCharlieWouldSay, conviction, persona }: VerdictBoxProps) {
+  // Resolve persona
+  const resolvedPersona = persona || getPersonaSafe("munger");
 
-function getVerdictSymbol(verdict: Verdict): string {
-  switch (verdict) {
-    case "STRONG BUY":
-      return "++";
-    case "BUY":
-      return "+";
-    case "HOLD":
-      return "=";
-    case "SELL":
-      return "-";
-    case "STRONG SELL":
-      return "--";
-    case "TOO HARD":
-      return "?";
-    default:
-      return "";
-  }
-}
+  // Get analysis text (support backward compatibility)
+  const analysisText = personaAnalysis || whatCharlieWouldSay || "";
 
-export function VerdictBox({ verdict, whatCharlieWouldSay, conviction }: VerdictBoxProps) {
-  const color = getVerdictColor(verdict);
-  const symbol = getVerdictSymbol(verdict);
+  // Use persona helpers for color and symbol
+  const color = resolvedPersona.getVerdictColor(verdict);
+  const symbol = resolvedPersona.getVerdictSymbol(verdict);
+
+  // Persona-specific header label
+  const headerLabel = resolvedPersona.id === "cathie"
+    ? "CATHIE'S VERDICT"
+    : "CHARLIE'S VERDICT";
 
   return (
     <Box flexDirection="column" marginY={1}>
@@ -63,7 +42,7 @@ export function VerdictBox({ verdict, whatCharlieWouldSay, conviction }: Verdict
         {/* Header with verdict and conviction */}
         <Box marginBottom={1} justifyContent="space-between">
           <Text bold color={color}>
-            [{symbol}] CHARLIE'S VERDICT: {verdict}
+            [{symbol}] {headerLabel}: {verdict}
           </Text>
           {conviction !== undefined && (
             <Box>
@@ -76,9 +55,9 @@ export function VerdictBox({ verdict, whatCharlieWouldSay, conviction }: Verdict
           )}
         </Box>
 
-        {/* Charlie's wisdom */}
+        {/* Persona's wisdom */}
         <Box flexDirection="column">
-          <Markdown>{whatCharlieWouldSay}</Markdown>
+          <Markdown>{analysisText}</Markdown>
         </Box>
       </Box>
     </Box>

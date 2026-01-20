@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import type { AnalysisResult } from "../data/types.js";
+import type { PersonaId } from "../personas/types.js";
 
 const HISTORY_DIR = path.join(os.homedir(), ".lattice", "history");
 
@@ -12,6 +13,7 @@ export interface SavedAnalysis {
   timestamp: string;
   elapsedTime: number;
   verdict: string;
+  personaId: PersonaId;
   result: AnalysisResult;
 }
 
@@ -22,6 +24,7 @@ export interface AnalysisSummary {
   timestamp: string;
   verdict: string;
   price: string;
+  personaId: PersonaId;
 }
 
 function ensureHistoryDir(): void {
@@ -47,6 +50,7 @@ export function saveAnalysis(result: AnalysisResult, elapsedTime: number): strin
     timestamp,
     elapsedTime,
     verdict: result.finalAnalysis.verdict,
+    personaId: result.personaId,
     result,
   };
 
@@ -77,6 +81,7 @@ export function listAnalyses(): AnalysisSummary[] {
         timestamp: saved.timestamp,
         verdict: saved.verdict,
         price: saved.result.financialData.price,
+        personaId: saved.personaId || saved.result.personaId || "munger",
       });
     } catch {
       // Skip invalid files

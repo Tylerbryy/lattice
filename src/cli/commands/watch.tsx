@@ -7,19 +7,21 @@ import { runAllAgents, type AnalysisProgress } from "../../agents/orchestrator.j
 import { synthesizeAnalysis } from "../../synthesis/finalAnalysis.js";
 import { loadConfig } from "../../utils/config.js";
 import { saveAnalysis } from "../../utils/history.js";
-import { allAgentConfigs } from "../../agents/agentConfigs/index.js";
+import { getPersona } from "../../personas/index.js";
+import type { PersonaId, PersonaConfig } from "../../personas/types.js";
 import type { AnalysisResult } from "../../data/types.js";
 
 interface WatchAppProps {
   ticker: string;
   verbose?: boolean;
+  persona: PersonaConfig;
 }
 
-function WatchApp({ ticker, verbose = false }: WatchAppProps) {
+function WatchApp({ ticker, verbose = false, persona }: WatchAppProps) {
   const { exit } = useApp();
   const [phase, setPhase] = useState<"fetching" | "analyzing" | "synthesizing" | "complete" | "error">("fetching");
   const [agents, setAgents] = useState<AgentState[]>(() =>
-    allAgentConfigs.map((config) => ({
+    persona.agents.map((config) => ({
       id: config.id,
       name: config.name,
       status: "pending",
@@ -71,6 +73,7 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
           ticker,
           financialData,
           config,
+          persona,
           (progress: AnalysisProgress) => {
             setAgents((prev) =>
               prev.map((agent) => {
@@ -105,12 +108,13 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
 
         // Synthesize
         setPhase("synthesizing");
-        const finalAnalysis = await synthesizeAnalysis(ticker, financialData, agentOutputs, config);
+        const finalAnalysis = await synthesizeAnalysis(ticker, financialData, agentOutputs, config, persona);
 
         // Complete
         setPhase("complete");
         const analysisResult: AnalysisResult = {
           ticker,
+          personaId: persona.id,
           financialData,
           agentOutputs,
           finalAnalysis,
@@ -126,7 +130,7 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
     }
 
     runAnalysis();
-  }, [ticker]);
+  }, [ticker, persona]);
 
   if (phase === "error") {
     return (
@@ -137,7 +141,7 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
   }
 
   if (phase === "complete" && result) {
-    return <Results result={result} verbose={verbose} elapsedTime={elapsedTime} />;
+    return <Results result={result} verbose={verbose} elapsedTime={elapsedTime} persona={persona} />;
   }
 
   return (
@@ -146,13 +150,16 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
       ticker={ticker.toUpperCase()}
       elapsedTime={elapsedTime}
       phase={phase}
+      personaName={persona.displayName}
     />
   );
 }
 
-export async function watchCommand(ticker: string, options: { verbose?: boolean }): Promise<void> {
+export async function watchCommand(ticker: string, options: { verbose?: boolean; persona?: PersonaId }): Promise<void> {
+  const persona = getPersona(options.persona || "munger");
+
   const { waitUntilExit } = render(
-    <WatchApp ticker={ticker.toUpperCase()} verbose={options.verbose} />,
+    <WatchApp ticker={ticker.toUpperCase()} verbose={options.verbose} persona={persona} />,
     { patchConsole: false }
   );
   await waitUntilExit();

@@ -265,9 +265,10 @@ interface AgentDashboardProps {
   ticker: string;
   elapsedTime: number;
   phase: "fetching" | "analyzing" | "synthesizing" | "complete";
+  personaName?: string;
 }
 
-export function AgentDashboard({ agents, ticker, elapsedTime, phase }: AgentDashboardProps) {
+export function AgentDashboard({ agents, ticker, elapsedTime, phase, personaName }: AgentDashboardProps) {
   const { stdout } = useStdout();
   const termWidth = stdout?.columns || 120;
   const termHeight = stdout?.rows || 40;
@@ -342,7 +343,7 @@ export function AgentDashboard({ agents, ticker, elapsedTime, phase }: AgentDash
           <Text color="gray">│</Text>
           {phase === "fetching" && <><Text color="yellow"><Spinner type="dots" /></Text><Text> Fetching data...</Text></>}
           {phase === "analyzing" && <><Text color="cyan"><Spinner type="dots" /></Text><Text> Agents working ({completedCount}/10)</Text></>}
-          {phase === "synthesizing" && <><Text color="magenta"><Spinner type="dots" /></Text><Text> Charlie synthesizing...</Text></>}
+          {phase === "synthesizing" && <><Text color="magenta"><Spinner type="dots" /></Text><Text> {personaName || "Charlie"} synthesizing...</Text></>}
           {phase === "complete" && <Text color="green">✓ Complete</Text>}
         </Box>
         <Spacer />

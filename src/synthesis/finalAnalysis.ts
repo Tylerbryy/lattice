@@ -3,8 +3,9 @@ import type {
   AgentOutput,
   FinalAnalysis,
   Verdict,
-  CategoryInsights,
   FinvizData,
+  MungerCategoryInsights,
+  CathieCategoryInsights,
 } from "../data/types.js";
 import {
   aggregateSignals,
@@ -12,6 +13,8 @@ import {
   collectDataGaps,
 } from "../agents/orchestrator.js";
 import type { LatticeConfig } from "../utils/config.js";
+import type { PersonaConfig, CategoryInsights } from "../personas/types.js";
+import { getPersonaSafe, DEFAULT_PERSONA_ID } from "../personas/index.js";
 
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TOKENS = 4096;
@@ -19,45 +22,63 @@ const MAX_TOKENS = 4096;
 function buildSynthesisPrompt(
   ticker: string,
   data: FinvizData,
-  agentOutputs: AgentOutput[]
+  agentOutputs: AgentOutput[],
+  persona: PersonaConfig
 ): string {
   const signals = aggregateSignals(agentOutputs);
   const avgConfidence = getAverageConfidence(agentOutputs);
   const dataGaps = collectDataGaps(agentOutputs);
 
-  // Group analyses by category
-  const coreInvestment = agentOutputs
-    .filter((o) => o.agentId === 1)
-    .flatMap((o) => o.analyses);
-  const moatsOwner = agentOutputs
-    .filter((o) => o.agentId === 2)
-    .flatMap((o) => o.analyses);
-  const psychology = agentOutputs
-    .filter((o) => o.agentId === 3 || o.agentId === 4)
-    .flatMap((o) => o.analyses);
-  const lollapalooza = agentOutputs
-    .filter((o) => o.agentId === 5)
-    .flatMap((o) => o.analyses);
-  const mathProb = agentOutputs
-    .filter((o) => o.agentId === 6 || o.agentId === 7)
-    .flatMap((o) => o.analyses);
-  const economics = agentOutputs
-    .filter((o) => o.agentId === 8)
-    .flatMap((o) => o.analyses);
-  const systems = agentOutputs
-    .filter((o) => o.agentId === 9)
-    .flatMap((o) => o.analyses);
-  const decisionFilters = agentOutputs
-    .filter((o) => o.agentId === 10)
-    .flatMap((o) => o.analyses);
-
-  const formatAnalyses = (analyses: typeof coreInvestment) =>
-    analyses
+  const formatAnalyses = (agentIds: readonly number[]) => {
+    const analyses = agentOutputs
+      .filter((o) => agentIds.includes(o.agentId))
+      .flatMap((o) => o.analyses);
+    return analyses
       .map(
         (a) =>
           `### ${a.modelName}\n**Signal**: ${a.signal}\n${a.assessment}\n**Key Factors**: ${a.keyFactors.join(", ")}`
       )
       .join("\n\n");
+  };
+
+  // Build category sections dynamically from agent groups
+  const categorySections = persona.agentGroups
+    .map((group) => {
+      const analysesContent = formatAnalyses(group.agentIds);
+      return `### ${group.title.toUpperCase()}\n${analysesContent}`;
+    })
+    .join("\n\n");
+
+  // Persona-specific signal labels
+  const signalLabels = persona.id === "cathie"
+    ? {
+        positive: "Disruptive",
+        negative: "Legacy",
+        neutral: "Stagnant",
+        unknown: "Insufficient Data",
+      }
+    : {
+        positive: "Bullish",
+        negative: "Bearish",
+        neutral: "Neutral",
+        unknown: "Insufficient Data",
+      };
+
+  // Persona-specific verdict instructions
+  const verdictInstructions = persona.id === "cathie"
+    ? `3. **What's the verdict?** Use the criteria:
+   - HIGH CONVICTION BUY: At convergence of multiple platforms + massive TAM + 5x potential
+   - CONVICTION BUY: Clear disruptive positioning + strong S-curve + 3x potential
+   - HOLD: Disruptive characteristics but priced in, or needs more validation
+   - EXIT LEGACY: Value trap - cheap because it's being disrupted
+   - TOO EARLY: Technology pre-commercial or market not ready`
+    : `3. **What's the verdict?** Use the criteria:
+   - STRONG BUY: Rare. Exceptional + cheap + high conviction
+   - BUY: Good business, attractive price, margin of safety
+   - HOLD: Fair business, fair price, no edge
+   - SELL: Problems or better opportunities elsewhere
+   - STRONG SELL: Rare. Major problems + overvalued
+   - TOO HARD: Walk away. Outside competence.`;
 
   return `# Synthesis Request: ${ticker} (${data.companyName})
 
@@ -73,11 +94,11 @@ function buildSynthesisPrompt(
 | Insider Ownership | ${data.insiderOwn} |
 | Institutional Ownership | ${data.instOwn} |
 
-## Signal Tally from 10 Analysts (28 Mental Models)
-- **Bullish**: ${signals.bullish} signals
-- **Bearish**: ${signals.bearish} signals
-- **Neutral**: ${signals.neutral} signals
-- **Insufficient Data**: ${signals.insufficientData} signals
+## Signal Tally from 10 Analysts
+- **${signalLabels.positive}**: ${signals.bullish} signals
+- **${signalLabels.negative}**: ${signals.bearish} signals
+- **${signalLabels.neutral}**: ${signals.neutral} signals
+- **${signalLabels.unknown}**: ${signals.insufficientData} signals
 - **Average Confidence**: ${(avgConfidence * 100).toFixed(0)}%
 
 ## Data Gaps Identified
@@ -87,82 +108,39 @@ ${dataGaps.length > 0 ? dataGaps.map((g) => `- ${g}`).join("\n") : "None - analy
 
 ## Detailed Analysis by Category
 
-### CORE INVESTMENT PRINCIPLES
-*Circle of Competence, Margin of Safety, Mr. Market, Intrinsic Value*
-${formatAnalyses(coreInvestment)}
-
-### MOATS & OWNERSHIP
-*Economic Moats, Owner-Operator Mindset*
-${formatAnalyses(moatsOwner)}
-
-### PSYCHOLOGY & BEHAVIORAL
-*Misjudgment Psychology, Social Proof, Incentives, Commitment Bias, etc.*
-${formatAnalyses(psychology)}
-
-### LOLLAPALOOZA EFFECTS
-*Compounding Forces, Second-Order Thinking*
-${formatAnalyses(lollapalooza)}
-
-### MATH & PROBABILITY
-*Expected Value, Bayesian Thinking, Regression to Mean*
-${formatAnalyses(mathProb)}
-
-### ECONOMICS & BUSINESS
-*Microeconomics, Scale, Opportunity Cost*
-${formatAnalyses(economics)}
-
-### SYSTEMS THINKING
-*Feedback Loops, Adaptation, Critical Mass*
-${formatAnalyses(systems)}
-
-### DECISION FILTERS
-*Too Hard Pile, Investment Checklist*
-${formatAnalyses(decisionFilters)}
+${categorySections}
 
 ---
 
 ## Your Task
 
-Synthesize this into a Charlie Munger verdict. Focus on:
+Synthesize this into a ${persona.displayName} verdict. Focus on:
 
-1. **What's the core insight?** Don't average - find the truth. Is this a good business at a good price?
+1. **What's the core insight?** Don't average - find the truth.
 
-2. **What would Charlie actually say?** Be direct. Be specific. If it's overvalued, say by how much. If the moat is eroding, say why.
+2. **What would ${persona.displayName} actually say?** Be direct. Be specific.
 
-3. **What's the verdict?** Use the criteria:
-   - STRONG BUY: Rare. Exceptional + cheap + high conviction
-   - BUY: Good business, attractive price, margin of safety
-   - HOLD: Fair business, fair price, no edge
-   - SELL: Problems or better opportunities elsewhere
-   - STRONG SELL: Rare. Major problems + overvalued
-   - TOO HARD: Walk away. Outside competence.
+${verdictInstructions}
 
-4. **What are the red flags?** Be specific. Not "valuation concern" but "P/E of 33x for 10% growth implies paying $3.30 for $1 of earnings"
+4. **What are the red flags?** Be specific with numbers.
 
 5. **What would change the verdict?** What price? What improvement? Be actionable.`;
 }
 
-function validateVerdict(verdict: unknown): Verdict {
-  const validVerdicts: Verdict[] = [
-    "STRONG BUY",
-    "BUY",
-    "HOLD",
-    "SELL",
-    "STRONG SELL",
-    "TOO HARD",
-  ];
+function validateVerdict(verdict: unknown, persona: PersonaConfig): Verdict {
+  const validVerdicts = persona.validVerdicts;
   if (
     typeof verdict === "string" &&
     validVerdicts.includes(verdict as Verdict)
   ) {
     return verdict as Verdict;
   }
-  return "HOLD";
+  return "HOLD" as Verdict;
 }
 
-function validateCategoryInsights(
+function validateMungerCategoryInsights(
   insights: unknown
-): CategoryInsights {
+): MungerCategoryInsights {
   const obj = (insights as Record<string, unknown>) || {};
   return {
     coreInvestment: String(obj.coreInvestment || "No insight provided"),
@@ -174,48 +152,43 @@ function validateCategoryInsights(
   };
 }
 
+function validateCathieCategoryInsights(
+  insights: unknown
+): CathieCategoryInsights {
+  const obj = (insights as Record<string, unknown>) || {};
+  return {
+    disruptionPotential: String(obj.disruptionPotential || "No insight provided"),
+    sCurvePosition: String(obj.sCurvePosition || "No insight provided"),
+    convergenceOpportunity: String(obj.convergenceOpportunity || "No insight provided"),
+    tamExpansion: String(obj.tamExpansion || "No insight provided"),
+    innovationVelocity: String(obj.innovationVelocity || "No insight provided"),
+    contrarian: String(obj.contrarian || "No insight provided"),
+  };
+}
+
+function validateCategoryInsights(
+  insights: unknown,
+  persona: PersonaConfig
+): CategoryInsights {
+  if (persona.id === "cathie") {
+    return validateCathieCategoryInsights(insights);
+  }
+  return validateMungerCategoryInsights(insights);
+}
+
 export async function synthesizeAnalysis(
   ticker: string,
   data: FinvizData,
   agentOutputs: AgentOutput[],
-  config: LatticeConfig
+  config: LatticeConfig,
+  persona?: PersonaConfig
 ): Promise<FinalAnalysis> {
+  const resolvedPersona = persona || getPersonaSafe(DEFAULT_PERSONA_ID);
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
 
-  const systemPrompt = `You are Charlie Munger synthesizing 10 analysts' work into a final verdict. Write as Charlie would speak: direct, witty, occasionally grumpy, always honest.
-
-## Your Voice
-- Use plain language. No jargon, no hedging.
-- Be specific. "The P/E of 33x with 10% growth is paying $3.30 for $1 of earnings" not "valuation is rich."
-- Include your signature wit: "This reminds me of..." or "As I've said many times..."
-- Don't be afraid to be blunt: "This is a lousy business" or "The market has gone mad."
-
-## Your Quotes (weave in 1-2 naturally)
-- "Show me the incentive and I will show you the outcome"
-- "Invert, always invert"
-- "A great business at a fair price is superior to a fair business at a great price"
-- "The first rule is not to lose. The second rule is not to forget the first rule"
-- "All intelligent investing is value investing"
-- "It's not given to human beings to have such talent that they can just know everything"
-
-## Verdict Criteria
-| Verdict | When to Use |
-|---------|-------------|
-| STRONG BUY | Exceptional business + significant undervaluation + strong conviction. Rare. |
-| BUY | Good business at fair-to-attractive price with margin of safety |
-| HOLD | Quality business but fully valued; or already own and no reason to sell |
-| SELL | Overvalued or fundamentally deteriorating; better opportunities exist |
-| STRONG SELL | Major problems + significant overvaluation. Rare. |
-| TOO HARD | Cannot form a view; outside competence; too many unknowables |
-
-## What to Synthesize
-1. **The Core Insight**: What does the preponderance of evidence say? Don't average opinions - find the truth.
-2. **Key Numbers**: If any analyst ran a DCF or valuation, highlight it. If not, note the absence.
-3. **Category Themes**: Distill each category into one sentence capturing the essential insight.
-4. **Red Flags**: What worries you most? Be specific.
-5. **What Would Change Your Mind**: What would make this a better investment?
-
-Write 2-3 paragraphs as Charlie would actually say them - as if speaking at the Berkshire annual meeting.`;
+  const systemPrompt = resolvedPersona.synthesis.systemPrompt;
+  const verdictSchema = resolvedPersona.synthesis.verdictSchema;
+  const categoryInsightsSchema = resolvedPersona.synthesis.categoryInsightsSchema;
 
   const response = await client.beta.messages.create({
     model: MODEL,
@@ -225,7 +198,7 @@ Write 2-3 paragraphs as Charlie would actually say them - as if speaking at the 
     messages: [
       {
         role: "user",
-        content: buildSynthesisPrompt(ticker, data, agentOutputs),
+        content: buildSynthesisPrompt(ticker, data, agentOutputs, resolvedPersona),
       },
     ],
     output_format: {
@@ -233,11 +206,8 @@ Write 2-3 paragraphs as Charlie would actually say them - as if speaking at the 
       schema: {
         type: "object",
         properties: {
-          whatCharlieWouldSay: { type: "string" },
-          verdict: {
-            type: "string",
-            enum: ["STRONG BUY", "BUY", "HOLD", "SELL", "STRONG SELL", "TOO HARD"]
-          },
+          personaAnalysis: { type: "string" },
+          verdict: verdictSchema,
           keyNumbers: {
             type: "object",
             properties: {
@@ -255,23 +225,11 @@ Write 2-3 paragraphs as Charlie would actually say them - as if speaking at the 
             },
             additionalProperties: false
           },
-          categoryInsights: {
-            type: "object",
-            properties: {
-              coreInvestment: { type: "string" },
-              psychologyBehavioral: { type: "string" },
-              mathProbability: { type: "string" },
-              economicsBusiness: { type: "string" },
-              systemsThinking: { type: "string" },
-              decisionFilters: { type: "string" }
-            },
-            required: ["coreInvestment", "psychologyBehavioral", "mathProbability", "economicsBusiness", "systemsThinking", "decisionFilters"],
-            additionalProperties: false
-          },
+          categoryInsights: categoryInsightsSchema,
           redFlags: { type: "array", items: { type: "string" } },
           whatWouldMakeThisBetter: { type: "array", items: { type: "string" } }
         },
-        required: ["whatCharlieWouldSay", "verdict", "categoryInsights", "redFlags", "whatWouldMakeThisBetter"],
+        required: ["personaAnalysis", "verdict", "categoryInsights", "redFlags", "whatWouldMakeThisBetter"],
         additionalProperties: false
       }
     }
@@ -282,7 +240,7 @@ Write 2-3 paragraphs as Charlie would actually say them - as if speaking at the 
   );
 
   if (!textContent) {
-    return createFallbackAnalysis(agentOutputs);
+    return createFallbackAnalysis(agentOutputs, resolvedPersona);
   }
 
   try {
@@ -295,13 +253,17 @@ Write 2-3 paragraphs as Charlie would actually say them - as if speaking at the 
     const jsonStr = jsonMatch[1] || textContent.text;
     const parsed = JSON.parse(jsonStr.trim()) as Record<string, unknown>;
 
+    const personaAnalysis = String(
+      parsed.personaAnalysis || parsed.whatCharlieWouldSay || "Analysis could not be synthesized"
+    );
+
     return {
-      whatCharlieWouldSay: String(
-        parsed.whatCharlieWouldSay || "Analysis could not be synthesized"
-      ),
-      verdict: validateVerdict(parsed.verdict),
+      personaAnalysis,
+      // Backward compatibility for Munger persona
+      whatCharlieWouldSay: resolvedPersona.id === "munger" ? personaAnalysis : undefined,
+      verdict: validateVerdict(parsed.verdict, resolvedPersona),
       keyNumbers: parsed.keyNumbers as FinalAnalysis["keyNumbers"],
-      categoryInsights: validateCategoryInsights(parsed.categoryInsights),
+      categoryInsights: validateCategoryInsights(parsed.categoryInsights, resolvedPersona),
       redFlags: Array.isArray(parsed.redFlags)
         ? parsed.redFlags.map(String)
         : [],
@@ -311,63 +273,114 @@ Write 2-3 paragraphs as Charlie would actually say them - as if speaking at the 
     };
   } catch {
     // Try to extract what we can from unstructured text
-    return extractFromText(textContent.text, agentOutputs);
+    return extractFromText(textContent.text, agentOutputs, resolvedPersona);
   }
 }
 
 function extractFromText(
   text: string,
-  agentOutputs: AgentOutput[]
+  agentOutputs: AgentOutput[],
+  persona: PersonaConfig
 ): FinalAnalysis {
   // Try to detect verdict from text
-  let verdict: Verdict = "HOLD";
   const upperText = text.toUpperCase();
-  if (upperText.includes("STRONG BUY")) verdict = "STRONG BUY";
-  else if (upperText.includes("STRONG SELL")) verdict = "STRONG SELL";
-  else if (upperText.includes("TOO HARD")) verdict = "TOO HARD";
-  else if (upperText.includes("BUY")) verdict = "BUY";
-  else if (upperText.includes("SELL")) verdict = "SELL";
+  let verdict: Verdict;
+
+  if (persona.id === "cathie") {
+    if (upperText.includes("HIGH CONVICTION BUY")) verdict = "HIGH CONVICTION BUY";
+    else if (upperText.includes("CONVICTION BUY")) verdict = "CONVICTION BUY";
+    else if (upperText.includes("EXIT LEGACY")) verdict = "EXIT LEGACY";
+    else if (upperText.includes("TOO EARLY")) verdict = "TOO EARLY";
+    else verdict = "HOLD";
+  } else {
+    if (upperText.includes("STRONG BUY")) verdict = "STRONG BUY";
+    else if (upperText.includes("STRONG SELL")) verdict = "STRONG SELL";
+    else if (upperText.includes("TOO HARD")) verdict = "TOO HARD";
+    else if (upperText.includes("BUY")) verdict = "BUY";
+    else if (upperText.includes("SELL")) verdict = "SELL";
+    else verdict = "HOLD";
+  }
+
+  const personaAnalysis = text.slice(0, 1500);
 
   return {
-    whatCharlieWouldSay: text.slice(0, 1500),
+    personaAnalysis,
+    whatCharlieWouldSay: persona.id === "munger" ? personaAnalysis : undefined,
     verdict,
-    categoryInsights: {
-      coreInvestment: "See detailed analysis above",
-      psychologyBehavioral: "See detailed analysis above",
-      mathProbability: "See detailed analysis above",
-      economicsBusiness: "See detailed analysis above",
-      systemsThinking: "See detailed analysis above",
-      decisionFilters: "See detailed analysis above",
-    },
+    categoryInsights: persona.id === "cathie"
+      ? {
+          disruptionPotential: "See detailed analysis above",
+          sCurvePosition: "See detailed analysis above",
+          convergenceOpportunity: "See detailed analysis above",
+          tamExpansion: "See detailed analysis above",
+          innovationVelocity: "See detailed analysis above",
+          contrarian: "See detailed analysis above",
+        }
+      : {
+          coreInvestment: "See detailed analysis above",
+          psychologyBehavioral: "See detailed analysis above",
+          mathProbability: "See detailed analysis above",
+          economicsBusiness: "See detailed analysis above",
+          systemsThinking: "See detailed analysis above",
+          decisionFilters: "See detailed analysis above",
+        },
     redFlags: collectDataGaps(agentOutputs).slice(0, 5),
     whatWouldMakeThisBetter: [],
   };
 }
 
-function createFallbackAnalysis(agentOutputs: AgentOutput[]): FinalAnalysis {
+function createFallbackAnalysis(
+  agentOutputs: AgentOutput[],
+  persona: PersonaConfig
+): FinalAnalysis {
   const signals = aggregateSignals(agentOutputs);
 
-  let verdict: Verdict = "HOLD";
-  if (signals.insufficientData > signals.bullish + signals.bearish) {
-    verdict = "TOO HARD";
-  } else if (signals.bullish > signals.bearish * 2) {
-    verdict = signals.bullish > 15 ? "STRONG BUY" : "BUY";
-  } else if (signals.bearish > signals.bullish * 2) {
-    verdict = signals.bearish > 15 ? "STRONG SELL" : "SELL";
+  let verdict: Verdict;
+  if (persona.id === "cathie") {
+    if (signals.insufficientData > signals.bullish + signals.bearish) {
+      verdict = "TOO EARLY";
+    } else if (signals.bullish > signals.bearish * 2) {
+      verdict = signals.bullish > 15 ? "HIGH CONVICTION BUY" : "CONVICTION BUY";
+    } else if (signals.bearish > signals.bullish * 2) {
+      verdict = "EXIT LEGACY";
+    } else {
+      verdict = "HOLD";
+    }
+  } else {
+    if (signals.insufficientData > signals.bullish + signals.bearish) {
+      verdict = "TOO HARD";
+    } else if (signals.bullish > signals.bearish * 2) {
+      verdict = signals.bullish > 15 ? "STRONG BUY" : "BUY";
+    } else if (signals.bearish > signals.bullish * 2) {
+      verdict = signals.bearish > 15 ? "STRONG SELL" : "SELL";
+    } else {
+      verdict = "HOLD";
+    }
   }
 
+  const personaAnalysis = "The synthesis could not be completed properly. Review the individual agent analyses for insights.";
+
   return {
-    whatCharlieWouldSay:
-      "The synthesis could not be completed properly. Review the individual agent analyses for insights.",
+    personaAnalysis,
+    whatCharlieWouldSay: persona.id === "munger" ? personaAnalysis : undefined,
     verdict,
-    categoryInsights: {
-      coreInvestment: "Review agent 1 analysis",
-      psychologyBehavioral: "Review agents 3-4 analysis",
-      mathProbability: "Review agents 6-7 analysis",
-      economicsBusiness: "Review agent 8 analysis",
-      systemsThinking: "Review agent 9 analysis",
-      decisionFilters: "Review agent 10 analysis",
-    },
+    categoryInsights: persona.id === "cathie"
+      ? {
+          disruptionPotential: "Review agent 1-2 analysis",
+          sCurvePosition: "Review agent 2 analysis",
+          convergenceOpportunity: "Review agent 3 analysis",
+          tamExpansion: "Review agent 4 analysis",
+          innovationVelocity: "Review agent 8 analysis",
+          contrarian: "Review agent 10 analysis",
+        }
+      : {
+          coreInvestment: "Review agent 1 analysis",
+          psychologyBehavioral: "Review agents 3-4 analysis",
+          mathProbability: "Review agents 6-7 analysis",
+          economicsBusiness: "Review agent 8 analysis",
+          systemsThinking: "Review agent 9 analysis",
+          decisionFilters: "Review agent 10 analysis",
+        },
     redFlags: collectDataGaps(agentOutputs),
     whatWouldMakeThisBetter: ["Complete synthesis analysis"],
   };
