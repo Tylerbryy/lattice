@@ -1,5 +1,9 @@
 # Lattice
 
+<p align="center">
+  <img src="public/latticehd.gif" alt="Lattice Demo" width="800">
+</p>
+
 A CLI tool that analyzes stocks through Charlie Munger's 28 mental models using 10 parallel AI agents.
 
 ## Features
