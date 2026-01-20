@@ -3,6 +3,7 @@ import { analyzeCommand } from "./commands/analyze.js";
 import { mockCommand } from "./commands/mock.js";
 import { watchCommand } from "./commands/watch.js";
 import { mockWatchCommand } from "./commands/mock-watch.js";
+import { setupCommand } from "./commands/setup.js";
 
 const program = new Command();
 
@@ -44,6 +45,13 @@ program
   .description("Demo the live agent dashboard with simulated activity")
   .action(async () => {
     await mockWatchCommand();
+  });
+
+program
+  .command("setup")
+  .description("Configure API keys interactively")
+  .action(async () => {
+    await setupCommand();
   });
 
 export function runCli(): void {

@@ -39,7 +39,15 @@ bun run build
 
 ## Configuration
 
-Set environment variables or create `~/.lattice/config.json`:
+Run the interactive setup to configure your API keys:
+
+```bash
+lattice setup
+```
+
+This will guide you through entering your API keys and save them to `~/.lattice/config.json`.
+
+Alternatively, set environment variables:
 
 ```bash
 # Required
@@ -49,7 +57,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export EXA_API_KEY="exa-..."
 ```
 
-Or create config file:
+Or manually create the config file:
 
 ```json
 {
