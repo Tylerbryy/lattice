@@ -4,6 +4,8 @@ import { mockCommand } from "./commands/mock.js";
 import { watchCommand } from "./commands/watch.js";
 import { mockWatchCommand } from "./commands/mock-watch.js";
 import { setupCommand } from "./commands/setup.js";
+import { historyCommand } from "./commands/history.js";
+import { viewCommand } from "./commands/view.js";
 
 const program = new Command();
 
@@ -52,6 +54,23 @@ program
   .description("Configure API keys interactively")
   .action(async () => {
     await setupCommand();
+  });
+
+program
+  .command("history")
+  .description("List saved analyses")
+  .option("--clear", "Delete all saved analyses")
+  .action(async (options: { clear?: boolean }) => {
+    await historyCommand(options);
+  });
+
+program
+  .command("view")
+  .description("View a saved analysis")
+  .argument("<ticker|id>", "Ticker symbol or analysis ID")
+  .option("-v, -V, --verbose", "Show detailed analysis for each mental model")
+  .action(async (idOrTicker: string, options: { verbose?: boolean }) => {
+    await viewCommand(idOrTicker, options);
   });
 
 export function runCli(): void {

@@ -10,6 +10,7 @@ import {
 } from "../../agents/orchestrator.js";
 import { synthesizeAnalysis } from "../../synthesis/finalAnalysis.js";
 import { loadConfig } from "../../utils/config.js";
+import { saveAnalysis } from "../../utils/history.js";
 import type { AnalysisResult, FinvizData, AgentOutput } from "../../data/types.js";
 
 type Phase = "init" | "fetching" | "analyzing" | "synthesizing" | "done" | "error";
@@ -78,12 +79,17 @@ function AnalyzeApp({ ticker, verbose }: AnalyzeAppProps) {
         // Done
         const elapsed = Date.now() - startTimeRef.current;
         setElapsedTime(elapsed);
-        setResult({
+        const analysisResult: AnalysisResult = {
           ticker,
           financialData: data,
           agentOutputs,
           finalAnalysis,
-        });
+        };
+        setResult(analysisResult);
+
+        // Save to history
+        saveAnalysis(analysisResult, elapsed);
+
         setPhase("done");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error occurred");

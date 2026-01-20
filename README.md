@@ -80,6 +80,29 @@ lattice analyze AAPL --verbose
 lattice watch AAPL --verbose
 ```
 
+### History
+
+Analyses are automatically saved and can be retrieved later:
+
+```bash
+# List all saved analyses
+lattice history
+
+# View a saved analysis by ticker (shows most recent)
+lattice view AAPL
+
+# View a saved analysis by ID
+lattice view abc123
+
+# View with verbose mode
+lattice view AAPL --verbose
+
+# Clear all saved analyses
+lattice history --clear
+```
+
+Analyses are saved to `~/.lattice/history/`.
+
 ### Demo/Testing
 
 ```bash

@@ -6,6 +6,7 @@ import { scrapeFinviz } from "../../data/finvizScraper.js";
 import { runAllAgents, type AnalysisProgress } from "../../agents/orchestrator.js";
 import { synthesizeAnalysis } from "../../synthesis/finalAnalysis.js";
 import { loadConfig } from "../../utils/config.js";
+import { saveAnalysis } from "../../utils/history.js";
 import { allAgentConfigs } from "../../agents/agentConfigs/index.js";
 import type { AnalysisResult } from "../../data/types.js";
 
@@ -108,12 +109,16 @@ function WatchApp({ ticker, verbose = false }: WatchAppProps) {
 
         // Complete
         setPhase("complete");
-        setResult({
+        const analysisResult: AnalysisResult = {
           ticker,
           financialData,
           agentOutputs,
           finalAnalysis,
-        });
+        };
+        setResult(analysisResult);
+
+        // Save to history
+        saveAnalysis(analysisResult, Date.now() - startTime);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
         setPhase("error");
