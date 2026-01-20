@@ -12,7 +12,7 @@ import type { LatticeConfig } from "../utils/config.js";
 
 import * as fs from "fs";
 
-const MODEL = "claude-sonnet-4-5-20250929";
+const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 8192;
 const MAX_TURNS = 10;
 const VERBOSE = process.env.LATTICE_VERBOSE === "1";

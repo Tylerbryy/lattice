@@ -17,9 +17,9 @@ export interface AgentState {
   error?: string;
 }
 
-// Claude Sonnet 4.5 pricing
-const INPUT_COST_PER_MTOK = 1.50;
-const OUTPUT_COST_PER_MTOK = 7.50;
+// Claude Haiku 4.5 pricing (agents use Haiku)
+const INPUT_COST_PER_MTOK = 1.00;
+const OUTPUT_COST_PER_MTOK = 5.00;
 
 function calculateCost(inputTokens: number, outputTokens: number): number {
   return (inputTokens / 1_000_000) * INPUT_COST_PER_MTOK +

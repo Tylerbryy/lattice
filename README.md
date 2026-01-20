@@ -182,7 +182,7 @@ CLI Input (ticker)
 
 - **Runtime**: Bun
 - **Language**: TypeScript
-- **AI**: Anthropic Claude (claude-sonnet-4-5-20250929)
+- **AI**: Anthropic Claude (Haiku 4.5 for agents, Sonnet 4.5 for synthesis)
 - **CLI UI**: Ink (React for CLI)
 - **Web Scraping**: Cheerio
 - **Search**: Exa AI (optional)
