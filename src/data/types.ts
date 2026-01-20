@@ -92,10 +92,14 @@ export interface QuantitativeFinding {
   methodology: string;
 }
 
+export type Grade = "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "C-" | "D+" | "D" | "D-" | "F";
+
 export interface ModelAnalysis {
   modelName: string;
   assessment: string;
   signal: Signal;
+  grade: Grade;
+  gradeNote: string;
   keyFactors: string[];
   quantitativeFindings?: QuantitativeFinding[];
   sourcesUsed?: string[];

@@ -7,7 +7,7 @@ import {
   type ExaSearchInput,
 } from "./tools/exaSearch.js";
 import { formatFinvizDataForPrompt } from "../data/finvizScraper.js";
-import type { FinvizData, AgentOutput, Signal, ModelAnalysis } from "../data/types.js";
+import type { FinvizData, AgentOutput, Signal, Grade, ModelAnalysis } from "../data/types.js";
 import type { LatticeConfig } from "../utils/config.js";
 
 import * as fs from "fs";
@@ -57,9 +57,17 @@ ${formatFinvizDataForPrompt(data)}
    - \`neutral\`: Mixed or balanced evidence, no clear directional lean
    - \`insufficient_data\`: Cannot form a view due to missing critical information
 
-4. **Be specific**: Cite actual metrics. "P/E of 33.5x is 50% above the 5-year average of 22x" not "valuation is high."
+4. **Assign letter grades (A+ to F)** for each mental model based on how the company scores:
+   - A+/A/A-: Excellent (top decile for this factor)
+   - B+/B/B-: Good (above average)
+   - C+/C/C-: Average or mixed
+   - D+/D/D-: Below average / concerning
+   - F: Failing / major red flag
+   Include a brief 3-8 word note explaining the grade.
 
-5. **Acknowledge uncertainty**: State what you don't know. Munger values intellectual honesty.
+5. **Be specific**: Cite actual metrics. "P/E of 33.5x is 50% above the 5-year average of 22x" not "valuation is high."
+
+6. **Acknowledge uncertainty**: State what you don't know. Munger values intellectual honesty.
 
 ## Example Output
 
@@ -72,6 +80,8 @@ For a company with P/E of 25x, ROE of 30%, and 15% revenue growth:
       "modelName": "Circle of Competence",
       "assessment": "SaaS business model is straightforward: recurring subscription revenue with 95%+ gross margins. Unit economics are transparent (CAC of $500, LTV of $5,000, 10:1 ratio). The only complexity is enterprise deal cycles, which can extend 6-12 months. Core value drivers (retention, expansion revenue, sales efficiency) are measurable and trackable. This falls clearly within a generalist investor's competence circle.",
       "signal": "bullish",
+      "grade": "B+",
+      "gradeNote": "Understandable but operationally complex",
       "keyFactors": [
         "Simple recurring revenue model with visible metrics",
         "Unit economics easily verifiable from public filings",
@@ -94,6 +104,8 @@ Return a JSON object with EXACTLY this structure. The "analyses" array must cont
       "modelName": "EXACT_MODEL_NAME",
       "assessment": "4-6 sentences with specific evidence from the data",
       "signal": "bullish|bearish|neutral|insufficient_data",
+      "grade": "A+|A|A-|B+|B|B-|C+|C|C-|D+|D|D-|F",
+      "gradeNote": "3-8 word explanation of grade",
       "keyFactors": ["specific factor 1", "specific factor 2", "specific factor 3"]
     }
   ],
@@ -157,9 +169,11 @@ async function runSingleAgent(
                   modelName: { type: "string" },
                   assessment: { type: "string" },
                   signal: { type: "string", enum: ["bullish", "bearish", "neutral", "insufficient_data"] },
+                  grade: { type: "string", enum: ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F"] },
+                  gradeNote: { type: "string" },
                   keyFactors: { type: "array", items: { type: "string" } },
                 },
-                required: ["modelName", "assessment", "signal", "keyFactors"],
+                required: ["modelName", "assessment", "signal", "grade", "gradeNote", "keyFactors"],
                 additionalProperties: false,
               },
             },
@@ -322,6 +336,8 @@ function validateAgentOutput(
           modelName: String(a.modelName || "Unknown"),
           assessment: String(a.assessment || ""),
           signal: validateSignal(a.signal),
+          grade: validateGrade(a.grade),
+          gradeNote: String(a.gradeNote || ""),
           keyFactors: Array.isArray(a.keyFactors)
             ? a.keyFactors.map(String)
             : [],
@@ -336,6 +352,8 @@ function validateAgentOutput(
           modelName: model,
           assessment: "Analysis could not be completed",
           signal: "insufficient_data" as Signal,
+          grade: "C" as Grade,
+          gradeNote: "Unable to assess",
           keyFactors: [],
         })),
     confidence: typeof obj.confidence === "number" ? obj.confidence : 0.5,
@@ -354,6 +372,16 @@ function validateSignal(signal: unknown): Signal {
     return signal as Signal;
   }
   return "insufficient_data";
+}
+
+function validateGrade(grade: unknown): Grade {
+  const validGrades: Grade[] = [
+    "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F"
+  ];
+  if (typeof grade === "string" && validGrades.includes(grade as Grade)) {
+    return grade as Grade;
+  }
+  return "C";
 }
 
 function extractStructuredOutput(text: string, config: AgentConfig): AgentOutput {
@@ -393,10 +421,15 @@ function extractStructuredOutput(text: string, config: AgentConfig): AgentOutput
       signal = "insufficient_data";
     }
 
+    // Derive grade from signal
+    const grade: Grade = signal === "bullish" ? "B+" : signal === "bearish" ? "C-" : "C";
+
     return {
       modelName: model,
       assessment: assessment || "Analysis could not be extracted",
       signal,
+      grade,
+      gradeNote: "Derived from unstructured response",
       keyFactors: [],
     };
   });
@@ -418,6 +451,8 @@ function createFallbackOutput(config: AgentConfig): AgentOutput {
       modelName: model,
       assessment: "Analysis could not be completed due to an error",
       signal: "insufficient_data" as Signal,
+      grade: "C" as Grade,
+      gradeNote: "Unable to assess",
       keyFactors: [],
     })),
     confidence: 0,

@@ -4,6 +4,7 @@ import type { AnalysisResult, ModelAnalysis, Signal } from "../../data/types.js"
 import { Header } from "./Header.js";
 import { VerdictBox } from "./VerdictBox.js";
 import { QuantHighlights } from "./QuantHighlights.js";
+import { Scorecard } from "./Scorecard.js";
 import { aggregateSignals, getAverageConfidence } from "../../agents/orchestrator.js";
 
 interface ResultsProps {
@@ -408,6 +409,13 @@ export function Results({ result, verbose = false, elapsedTime }: ResultsProps) 
           </Box>
         ))}
       </Box>
+
+      {/* Summary Scorecard */}
+      <Divider label="Summary Scorecard" />
+      <Scorecard
+        analyses={agentOutputs.flatMap((o) => o.analyses)}
+        ticker={ticker}
+      />
 
       {/* Red Flags */}
       {finalAnalysis.redFlags.length > 0 && (
