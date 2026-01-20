@@ -7,6 +7,14 @@ interface QuantHighlightsProps {
   currentPrice?: string;
 }
 
+// Normalize percentage values - LLM sometimes returns 0.25 (25%) or 25 (25%)
+function normalizePercent(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  // If absolute value > 2, assume it's already a percentage (e.g., 25 means 25%)
+  // Otherwise assume it's a decimal (e.g., 0.25 means 25%)
+  return Math.abs(value) > 2 ? value / 100 : value;
+}
+
 export function QuantHighlights({ keyNumbers, currentPrice }: QuantHighlightsProps) {
   if (!keyNumbers) {
     return null;
@@ -20,6 +28,10 @@ export function QuantHighlights({ keyNumbers, currentPrice }: QuantHighlightsPro
   if (!hasAnyData) {
     return null;
   }
+
+  // Normalize the percentage values
+  const marginOfSafety = normalizePercent(keyNumbers.marginOfSafety);
+  const fiveYearCAGR = normalizePercent(keyNumbers.fiveYearCAGRProjection);
 
   return (
     <Box flexDirection="column" marginY={1}>
@@ -42,35 +54,35 @@ export function QuantHighlights({ keyNumbers, currentPrice }: QuantHighlightsPro
             <Text dimColor> ({keyNumbers.intrinsicValueEstimate.methodology})</Text>
           </Box>
         )}
-        {keyNumbers.marginOfSafety !== undefined && (
+        {marginOfSafety !== undefined && (
           <Box>
             <Text dimColor>Margin of Safety: </Text>
             <Text
               color={
-                keyNumbers.marginOfSafety > 0.25
+                marginOfSafety > 0.25
                   ? "green"
-                  : keyNumbers.marginOfSafety > 0
+                  : marginOfSafety > 0
                     ? "yellow"
                     : "red"
               }
             >
-              {(keyNumbers.marginOfSafety * 100).toFixed(1)}%
+              {(marginOfSafety * 100).toFixed(1)}%
             </Text>
           </Box>
         )}
-        {keyNumbers.fiveYearCAGRProjection !== undefined && (
+        {fiveYearCAGR !== undefined && (
           <Box>
             <Text dimColor>5-Year CAGR Projection: </Text>
             <Text
               color={
-                keyNumbers.fiveYearCAGRProjection > 0.15
+                fiveYearCAGR > 0.15
                   ? "green"
-                  : keyNumbers.fiveYearCAGRProjection > 0.08
+                  : fiveYearCAGR > 0.08
                     ? "yellow"
                     : "red"
               }
             >
-              {(keyNumbers.fiveYearCAGRProjection * 100).toFixed(1)}%
+              {(fiveYearCAGR * 100).toFixed(1)}%
             </Text>
           </Box>
         )}

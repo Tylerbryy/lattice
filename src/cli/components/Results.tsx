@@ -16,6 +16,13 @@ interface ResultsProps {
   persona?: PersonaConfig;
 }
 
+// Normalize percentage values - LLM sometimes returns 0.25 (25%) or 25 (25%)
+function normalizePercent(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  // If absolute value > 2, assume it's already a percentage (e.g., 25 means 25%)
+  return Math.abs(value) > 2 ? value / 100 : value;
+}
+
 function countSignals(analyses: ModelAnalysis[]) {
   return analyses.reduce(
     (acc, a) => {
@@ -114,7 +121,7 @@ function TLDRBox({
   verdict,
   signals,
   conviction,
-  marginOfSafety,
+  marginOfSafety: rawMarginOfSafety,
   oneLiner,
   persona,
 }: {
@@ -126,6 +133,7 @@ function TLDRBox({
   persona: PersonaConfig;
 }) {
   const verdictColor = persona.getVerdictColor(verdict);
+  const marginOfSafety = normalizePercent(rawMarginOfSafety);
 
   return (
     <Box
@@ -301,8 +309,10 @@ export function Results({ result, verbose = false, elapsedTime, persona }: Resul
   );
 
   // Get first sentence of personaAnalysis for TL;DR
+  // Use regex that doesn't split on decimal points (e.g., "$8.2 billion")
   const analysisText = finalAnalysis.personaAnalysis || finalAnalysis.whatCharlieWouldSay || "";
-  const oneLiner = analysisText.split(/[.!?]/)[0] + ".";
+  const sentenceMatch = analysisText.match(/^[^.!?]*(?:\d+\.\d+[^.!?]*)*[.!?]/);
+  const oneLiner = sentenceMatch ? sentenceMatch[0] : analysisText.slice(0, 150) + "...";
 
   // Group analyses by agent
   const getAnalysesForGroup = (agentIds: readonly number[]) =>
