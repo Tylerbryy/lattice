@@ -40,11 +40,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tylergibbs/lattice"
+    "url": "https://github.com/Tylerbryy/lattice"
   },
-  "homepage": "https://github.com/tylergibbs/lattice#readme",
+  "homepage": "https://github.com/Tylerbryy/lattice#readme",
   "bugs": {
-    "url": "https://github.com/tylergibbs/lattice/issues"
+    "url": "https://github.com/Tylerbryy/lattice/issues"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
