@@ -253,9 +253,20 @@ export async function synthesizeAnalysis(
     const jsonStr = jsonMatch[1] || textContent.text;
     const parsed = JSON.parse(jsonStr.trim()) as Record<string, unknown>;
 
-    const personaAnalysis = String(
+    // Handle double-encoded JSON (API sometimes returns JSON string in personaAnalysis field)
+    let personaAnalysis = String(
       parsed.personaAnalysis || parsed.whatCharlieWouldSay || "Analysis could not be synthesized"
     );
+
+    // If personaAnalysis looks like JSON, try to extract the actual text
+    if (personaAnalysis.startsWith("{") && personaAnalysis.includes("personaAnalysis")) {
+      try {
+        const nested = JSON.parse(personaAnalysis) as Record<string, unknown>;
+        personaAnalysis = String(nested.personaAnalysis || nested.whatCharlieWouldSay || personaAnalysis);
+      } catch {
+        // Keep original if nested parse fails
+      }
+    }
 
     return {
       personaAnalysis,
