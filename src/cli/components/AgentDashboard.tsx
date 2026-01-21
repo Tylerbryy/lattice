@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Box, Text, useStdout, Spacer, useInput } from "ink";
 import Spinner from "ink-spinner";
 
@@ -303,12 +303,15 @@ export function AgentDashboard({ agents, ticker, elapsedTime, phase, personaName
     }
   });
 
-  const completedCount = agents.filter(a => a.status === "done").length;
-  const totalToolCalls = agents.reduce((sum, a) => sum + a.toolCalls, 0);
-  const totalInputTokens = agents.reduce((sum, a) => sum + a.inputTokens, 0);
-  const totalOutputTokens = agents.reduce((sum, a) => sum + a.outputTokens, 0);
-  const totalTokens = totalInputTokens + totalOutputTokens;
-  const totalCost = calculateCost(totalInputTokens, totalOutputTokens);
+  const { completedCount, totalToolCalls, totalTokens, totalCost } = useMemo(() => {
+    const completedCount = agents.filter(a => a.status === "done").length;
+    const totalToolCalls = agents.reduce((sum, a) => sum + a.toolCalls, 0);
+    const totalInputTokens = agents.reduce((sum, a) => sum + a.inputTokens, 0);
+    const totalOutputTokens = agents.reduce((sum, a) => sum + a.outputTokens, 0);
+    const totalTokens = totalInputTokens + totalOutputTokens;
+    const totalCost = calculateCost(totalInputTokens, totalOutputTokens);
+    return { completedCount, totalToolCalls, totalTokens, totalCost };
+  }, [agents]);
 
   // Calculate card width based on terminal width (5 columns with gaps)
   const gap = 1;

@@ -170,7 +170,7 @@ export function Spinner({ phase, progress, ticker, startTime }: SpinnerProps) {
     if (!startTime) return;
     const interval = setInterval(() => {
       setElapsed(Date.now() - startTime);
-    }, 100);
+    }, 1000);
     return () => clearInterval(interval);
   }, [startTime]);
 

@@ -41,7 +41,7 @@ function WatchApp({ ticker, verbose = false, persona }: WatchAppProps) {
   useEffect(() => {
     const interval = setInterval(() => {
       setElapsedTime(Date.now() - startTime);
-    }, 100);
+    }, 1000);
     return () => clearInterval(interval);
   }, [startTime]);
 
@@ -75,8 +75,9 @@ function WatchApp({ ticker, verbose = false, persona }: WatchAppProps) {
           config,
           persona,
           (progress: AnalysisProgress) => {
-            setAgents((prev) =>
-              prev.map((agent) => {
+            setAgents((prev) => {
+              let hasChanges = false;
+              const next = prev.map((agent) => {
                 const agentProgress = progress.agents.find((a) => a.agentId === agent.id);
                 if (!agentProgress) return agent;
 
@@ -92,6 +93,21 @@ function WatchApp({ ticker, verbose = false, persona }: WatchAppProps) {
                   status = "error";
                 }
 
+                const completedModels = status === "done" ? agent.mentalModels.length : Math.floor(agentProgress.turn / 2);
+
+                // Only create new object if something actually changed
+                if (
+                  agent.status === status &&
+                  agent.currentTool === agentProgress.lastAction &&
+                  agent.toolCalls === agentProgress.turn &&
+                  agent.inputTokens === agentProgress.inputTokens &&
+                  agent.outputTokens === agentProgress.outputTokens &&
+                  agent.completedModels === completedModels
+                ) {
+                  return agent;
+                }
+
+                hasChanges = true;
                 return {
                   ...agent,
                   status,
@@ -99,10 +115,13 @@ function WatchApp({ ticker, verbose = false, persona }: WatchAppProps) {
                   toolCalls: agentProgress.turn,
                   inputTokens: agentProgress.inputTokens,
                   outputTokens: agentProgress.outputTokens,
-                  completedModels: status === "done" ? agent.mentalModels.length : Math.floor(agentProgress.turn / 2),
+                  completedModels,
                 };
-              })
-            );
+              });
+
+              // Return same array reference if nothing changed
+              return hasChanges ? next : prev;
+            });
           }
         );
 
