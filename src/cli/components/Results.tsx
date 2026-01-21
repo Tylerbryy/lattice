@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Box, Text, useInput } from "ink";
 import type { AnalysisResult, ModelAnalysis, Signal } from "../../data/types.js";
 import { Header } from "./Header.js";
@@ -202,8 +202,8 @@ function ModelCard({ analysis, persona }: { analysis: ModelAnalysis; persona: Pe
       {/* Key factors */}
       {analysis.keyFactors.length > 0 && (
         <Box marginTop={1} flexDirection="column">
-          {analysis.keyFactors.slice(0, 3).map((factor, i) => (
-            <Text key={i} dimColor>• {factor}</Text>
+          {analysis.keyFactors.slice(0, 3).map((factor) => (
+            <Text key={factor} dimColor>• {factor}</Text>
           ))}
         </Box>
       )}
@@ -251,8 +251,8 @@ function CollapsibleModelGroup({
 
       {isExpanded && (
         <Box flexDirection="column" paddingLeft={2}>
-          {analyses.map((a, i) => (
-            <ModelCard key={i} analysis={a} persona={persona} />
+          {analyses.map((a) => (
+            <ModelCard key={a.modelName} analysis={a} persona={persona} />
           ))}
         </Box>
       )}
@@ -278,47 +278,59 @@ function Section({ title, children, color = "white" }: {
 
 export function Results({ result, verbose = false, elapsedTime, persona }: ResultsProps) {
   const { ticker, financialData, agentOutputs, finalAnalysis } = result;
-  const signals = aggregateSignals(agentOutputs);
-  const avgConfidence = getAverageConfidence(agentOutputs);
+
+  // Memoize expensive calculations
+  const signals = useMemo(() => aggregateSignals(agentOutputs), [agentOutputs]);
+  const avgConfidence = useMemo(() => getAverageConfidence(agentOutputs), [agentOutputs]);
 
   // Get persona from result or prop or default
-  const resolvedPersona = persona || getPersonaSafe(result.personaId);
+  const resolvedPersona = useMemo(
+    () => persona || getPersonaSafe(result.personaId),
+    [persona, result.personaId]
+  );
 
   // State for collapsible sections in verbose mode
   const [expandedGroup, setExpandedGroup] = useState<number | null>(null);
 
-  // Keyboard navigation for verbose mode - only active when verbose is true
-  useInput(
-    (input, key) => {
+  // Memoize keyboard handler
+  const handleInput = useCallback(
+    (input: string, key: { escape?: boolean; downArrow?: boolean; upArrow?: boolean }) => {
       const numGroups = resolvedPersona.agentGroups.length;
       if (input >= "1" && input <= String(numGroups)) {
         const idx = parseInt(input) - 1;
-        setExpandedGroup(expandedGroup === idx ? null : idx);
+        setExpandedGroup((prev) => (prev === idx ? null : idx));
       }
       if (key.escape) {
         setExpandedGroup(null);
       }
-      if (key.downArrow && expandedGroup !== null && expandedGroup < numGroups - 1) {
-        setExpandedGroup(expandedGroup + 1);
+      if (key.downArrow) {
+        setExpandedGroup((prev) => (prev !== null && prev < numGroups - 1 ? prev + 1 : prev));
       }
-      if (key.upArrow && expandedGroup !== null && expandedGroup > 0) {
-        setExpandedGroup(expandedGroup - 1);
+      if (key.upArrow) {
+        setExpandedGroup((prev) => (prev !== null && prev > 0 ? prev - 1 : prev));
       }
     },
-    { isActive: verbose }
+    [resolvedPersona.agentGroups.length]
   );
 
-  // Get first sentence of personaAnalysis for TL;DR
-  // Use regex that doesn't split on decimal points (e.g., "$8.2 billion")
-  const analysisText = finalAnalysis.personaAnalysis || finalAnalysis.whatCharlieWouldSay || "";
-  const sentenceMatch = analysisText.match(/^[^.!?]*(?:\d+\.\d+[^.!?]*)*[.!?]/);
-  const oneLiner = sentenceMatch ? sentenceMatch[0] : analysisText.slice(0, 150) + "...";
+  // Keyboard navigation for verbose mode - only active when verbose is true
+  useInput(handleInput, { isActive: verbose });
 
-  // Group analyses by agent
-  const getAnalysesForGroup = (agentIds: readonly number[]) =>
-    agentOutputs
-      .filter((o) => agentIds.includes(o.agentId))
-      .flatMap((o) => o.analyses);
+  // Get first sentence of personaAnalysis for TL;DR - memoized
+  const oneLiner = useMemo(() => {
+    const analysisText = finalAnalysis.personaAnalysis || finalAnalysis.whatCharlieWouldSay || "";
+    const sentenceMatch = analysisText.match(/^[^.!?]*(?:\d+\.\d+[^.!?]*)*[.!?]/);
+    return sentenceMatch ? sentenceMatch[0] : analysisText.slice(0, 150) + "...";
+  }, [finalAnalysis.personaAnalysis, finalAnalysis.whatCharlieWouldSay]);
+
+  // Group analyses by agent - memoized
+  const getAnalysesForGroup = useCallback(
+    (agentIds: readonly number[]) =>
+      agentOutputs
+        .filter((o) => agentIds.includes(o.agentId))
+        .flatMap((o) => o.analyses),
+    [agentOutputs]
+  );
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -401,8 +413,8 @@ export function Results({ result, verbose = false, elapsedTime, persona }: Resul
         <>
           <Divider label="Warnings" />
           <Section title="Red Flags" color="red">
-            {finalAnalysis.redFlags.map((flag, i) => (
-              <Box key={i}>
+            {finalAnalysis.redFlags.map((flag) => (
+              <Box key={flag}>
                 <Text color="red">! </Text>
                 <Text wrap="wrap" color="red">{flag}</Text>
               </Box>
@@ -414,8 +426,8 @@ export function Results({ result, verbose = false, elapsedTime, persona }: Resul
       {/* What Would Make This Better */}
       {finalAnalysis.whatWouldMakeThisBetter.length > 0 && (
         <Section title="What Would Improve This">
-          {finalAnalysis.whatWouldMakeThisBetter.map((item, i) => (
-            <Box key={i}>
+          {finalAnalysis.whatWouldMakeThisBetter.map((item) => (
+            <Box key={item}>
               <Text color="gray">• </Text>
               <Text wrap="wrap" color="gray">{item}</Text>
             </Box>

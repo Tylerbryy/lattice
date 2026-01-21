@@ -47,7 +47,7 @@ export function Select<T>({ items, onSelect, title, initialIndex = 0 }: SelectPr
       {items.map((item, index) => {
         const isSelected = index === selectedIndex;
         return (
-          <Box key={index}>
+          <Box key={String(item.value)}>
             <Text color={isSelected ? "cyan" : "gray"}>
               {isSelected ? ">" : " "}
             </Text>
@@ -197,8 +197,8 @@ export function Summary({ items }: SummaryProps) {
       flexDirection="column"
       marginY={1}
     >
-      {items.map((item, i) => (
-        <Box key={i}>
+      {items.map((item) => (
+        <Box key={item.label}>
           <Text color="gray">{item.label}: </Text>
           <Text color={item.color || "white"} bold>{item.value}</Text>
         </Box>
